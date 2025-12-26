@@ -76,7 +76,7 @@ The critical challenge in building Droplo was handling **long-running Docker bui
 - Piped raw output from the Docker daemon socket directly to the frontend
 - Maintained a single long-lived HTTP connection for the entire build lifecycle
 
-![Architecture Logic](assets/streaming-architecture.png)
+![Architecture Logic](streaming-architecture.png)
 
 ---
 
