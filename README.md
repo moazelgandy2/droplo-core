@@ -5,13 +5,13 @@
 ### Serverless Container Orchestration Engine
 
 **Status:** Research Prototype / Engineering Case Study
-**Domain:** droplo.cloud (Legacy)
+**Domain:** `droplo.cloud` (Legacy)
 
 </div>
 
 ---
 
-Droplo is a custom Platform-as-a-Service (PaaS) engine designed to automate the deployment of Next.js applications. It reverse-engineers the core deployment pipeline of platforms like Vercel, utilizing Docker, Hono, Bash scripts, and Cloudflare to build, containerize, and route traffic to applications in real time.
+**Droplo** is a custom Platform-as-a-Service (PaaS) engine designed to automate the deployment of Next.js applications. It reverse-engineers the core deployment pipeline of platforms like Vercel, utilizing **Docker**, **Hono**, **Bash Scripts**, and **Cloudflare** to build, containerize, and route traffic to applications in real-time.
 
 Unlike standard CI/CD scripts, Droplo implements a **stateful build system** with live log streaming via HTTP chunked transfer encoding, giving users a real-time "Console" experience directly in the browser.
 
@@ -23,21 +23,21 @@ The core engine operates as a bridge between the user’s Git repository and a r
 
 ```mermaid
 flowchart TD
-    User[👤 User/Developer] -->|1. Git Push / Click Deploy| Dashboard[🖥️ Droplo Dashboard<br/>Next.js]
-    Dashboard -->|2. Trigger Build| Hono[🌐 Hono API Gateway]
-    Hono -->|3. Spawn Process| Host[🐧 Linux Orchestration Host]
+    User["👤 User/Developer"] -->|1. Git Push / Click Deploy| Dashboard["🖥️ Droplo Dashboard<br/>Next.js"]
+    Dashboard -->|2. Trigger Build| Hono["🌐 Hono API Gateway"]
+    Hono -->|3. Spawn Process| Host["🐧 Linux Orchestration Host"]
 
-    subgraph MetalLayer ["The Metal Layer"]
-        Host -->|Executes| Script[📜 deploy-container.sh]
-        Script -->|Build & Run| Docker[🐳 Docker Engine]
-        Script -->|Config & Reload| Nginx[🔀 Nginx Reverse Proxy]
+    subgraph MetalLayer [The Metal Layer]
+        Host -->|Executes| Script["📜 deploy-container.sh"]
+        Script -->|Build & Run| Docker["🐳 Docker Engine"]
+        Script -->|Config & Reload| Nginx["🔀 Nginx Reverse Proxy"]
     end
 
-    Docker -->|Pull node:18-alpine| Build[⚙️ Build Phase]
+    Docker -->|Pull node:18-alpine| Build["⚙️ Build Phase"]
     Build -->|Pipe Raw Logs| Hono
     Hono -->|HTTP Stream| Dashboard
 
-    Cloudflare[☁️ Cloudflare DNS API] -->|Create CNAME| Public[🌍 Public Access]
+    Cloudflare["☁️ Cloudflare DNS API"] -->|Create CNAME| Public["🌍 Public Access"]
     Public -->|https://app.droplo.cloud| Nginx
     Nginx -->|Route Traffic| Docker
 ```
@@ -75,6 +75,8 @@ The critical challenge in building Droplo was handling **long-running Docker bui
 - Used **Hono’s streaming context**
 - Piped raw output from the Docker daemon socket directly to the frontend
 - Maintained a single long-lived HTTP connection for the entire build lifecycle
+
+![Architecture Logic](assets/streaming-architecture.png)
 
 ---
 
@@ -224,42 +226,62 @@ The logic layer that chains the entire lifecycle together:
 - Execution time tracking per phase (`startTime` vs `endTime`)
 - Performance reporting for observability
 
+### 🧠 Intelligent Log Parsing Engine
+
+Raw Docker logs are hard to read. I implemented a client-side parsing engine that analyzes log streams in real-time to enhance readability:
+
+- **Context Awareness:** The `LogLine` component uses Regex to detect log types (`Step`, `Error`, `Hash`, `Success`) and applies dynamic styling (e.g., green checks for success, red backgrounds for errors).
+- **Performance Optimization:** Wrapped in `React.memo` to prevent re-rendering thousands of lines during high-frequency stream updates.
+- **Interactive Artifacts:** Automatically detects URLs (like deployed domains) inside the stdout stream and converts them into clickable external links.
+
+```typescript
+// Example: Converting raw text into rich UI components
+const getLineFormat = (line: string) => {
+  if (line.includes("Error")) return LineFormat.ERROR;
+  if (line.match(/[a-f0-9]{64}/)) return LineFormat.HASH; // Detect Docker SHA
+  if (line.includes("http")) return LineFormat.URL; // clickable links
+  return LineFormat.DEFAULT;
+};
+```
+
+### 🔐 Auth & Security Note
+
+**Authentication:** Integrated **Clerk** for secure identity management, ensuring only authorized users can trigger build pipelines or access deployment logs.
+
 ---
 
 ## 🛠️ Technology Stack
 
-### Orchestration API
+| Layer                 | Technologies                                                  |
+| :-------------------- | :------------------------------------------------------------ |
+| **Orchestration API** | Hono, Bun (Runtime), Node.js Streams                          |
+| **System Scripting**  | Bash, Shell Scripting, Linux Utils                            |
+| **Infrastructure**    | Docker Engine API (dockerode), Linux VPS                      |
+| **Networking**        | Cloudflare DNS API, Nginx Reverse Proxy                       |
+| **Frontend**          | Next.js 14, Zustand, TailwindCSS, Shadcn UI                   |
+| **Storage**           | UploadThing (Artifact caching), PostgreSQL (Project metadata) |
 
-- **Hono**
-- **Bun** (runtime)
-- **Node.js Streams**
+---
 
-### System Scripting
+## 🔮 Future Roadmap & Improvements
 
-- **Bash**
-- **Linux utilities**
+To transition Droplo from a prototype to a production-grade PaaS, the following architectural upgrades are planned:
 
-### Infrastructure
+1.  **Zero-Downtime Deployments (Blue/Green):**
 
-- **Docker Engine API** (dockerode)
-- **Linux VPS**
+    - _Current:_ Atomic stop/start creates ~2s downtime.
+    - _Future:_ Boot new container -> Health check -> Switch Nginx Upstream -> Drain old container.
 
-### Networking
+2.  **Asynchronous Build Queue:**
 
-- **Cloudflare DNS API**
-- **Nginx Reverse Proxy**
+    - Implement **Redis + BullMQ** to offload build jobs from the main API thread. This prevents CPU exhaustion during concurrent deployment spikes.
 
-### Frontend
+3.  **Ephemeral Preview Environments:**
 
-- **Next.js 14**
-- **Zustand**
-- **TailwindCSS**
-- **shadcn/ui**
+    - Automatically spin up temporary containers for GitHub Pull Requests (e.g., `pr-123.droplo.cloud`) and tear them down upon merge.
 
-### Storage
-
-- **UploadThing** (artifact caching)
-- **PostgreSQL** (project metadata)
+4.  **Security Hardening:**
+    - Transition from privileged Docker execution to **Rootless Docker** or **Firecracker MicroVMs** (like AWS Lambda) to prevent container escape vulnerabilities.
 
 ---
 
@@ -287,7 +309,7 @@ Production usage requires:
 
 <div align="center">
 
-**Author:** [Moaz El Gandy](https://github.com/moazelgandy)
+**Author:** [Moaz El Gandy](https://github.com/moazelgandy2)
 _Building the tools I wish I had._
 
 </div>
